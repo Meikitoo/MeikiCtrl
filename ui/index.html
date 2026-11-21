@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MeikiCtrl</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="brand-name">MEIKI<span>CTRL</span></div>
+        <div class="brand-sub">by Meikitoow</div>
+      </div>
+    </div>
+    <nav>
+      <div class="nav-title">Accueil</div>
+      <button class="nav-item active" data-page="dashboard">Tableau de bord</button>
+      <button class="nav-item" data-page="profiles">Profils</button>
+      <div class="nav-title">Ta manette</div>
+      <button class="nav-item" data-page="sticks">Sticks &amp; gâchettes</button>
+      <button class="nav-item" data-page="remap">Remappage</button>
+      <div class="nav-title">Jeu</div>
+      <button class="nav-item" data-page="emulation">Émulation Xbox</button>
+      <button class="nav-item" data-page="overlay">Overlay manette</button>
+      <div class="nav-title">Appli</div>
+      <button class="nav-item" data-page="system">Système</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div id="foot-pad">Manette : —</div>
+      <div id="foot-profile">Profil : —</div>
+    </div>
+  </aside>
+
+  <main>
+    <!-- TABLEAU DE BORD -->
+    <section class="page active" id="page-dashboard">
+      <header>
+        <h1>Tableau de bord</h1>
+        <p>Ta manette, ton profil et ta sortie en un coup d'œil.</p>
+      </header>
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head">
+            <h2 id="pad-name">Aucune manette</h2>
+            <span class="badge" id="pad-badge">Déconnectée</span>
+          </div>
+          <div class="pad-meta">
+            <div><span class="k">Connexion</span><span class="v" id="pad-conn">—</span></div>
+            <div><span class="k">Batterie</span><span class="v" id="pad-batt">—</span></div>
+          </div>
+          <div class="battery"><div id="batt-bar"></div></div>
+          <div class="test-title">Teste ta manette</div>
+          <div class="chips" id="chips"></div>
+          <div class="mini-sticks">
+            <canvas id="mini-l" width="120" height="120"></canvas>
+            <div class="triggers">
+              <div class="trig"><span>L2</span><div class="bar"><div id="bar-l2"></div></div></div>
+              <div class="trig"><span>R2</span><div class="bar"><div id="bar-r2"></div></div></div>
+            </div>
+            <canvas id="mini-r" width="120" height="120"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Actions rapides</h2>
+          <div class="profile-banner">
+            <div>
+              <div class="k">Profil actif</div>
+              <div class="pb-name" id="dash-profile">—</div>
+            </div>
+            <div class="pb-game" id="dash-game"></div>
+          </div>
+          <div class="toggle-row">
+            <div>
+              <div class="t-title">Overlay manette</div>
+              <div class="t-sub">La manette 3D par-dessus ton jeu · <kbd>F8</kbd></div>
+            </div>
+            <label class="switch"><input type="checkbox" class="t-overlay" /><span></span></label>
+          </div>
+          <div class="toggle-row">
+            <div>
+              <div class="t-title">Émulation Xbox</div>
+              <div class="t-sub">Les jeux voient une manette Xbox 360</div>
+            </div>
+            <label class="switch"><input type="checkbox" class="t-emu" /><span></span></label>
+          </div>
+          <div class="note" id="q-emu-state"></div>
+          <div class="actions">
+            <button class="btn" data-goto="sticks">Régler la dérive</button>
+            <button class="btn ghost" data-goto="profiles">Profils</button>
+            <button class="btn ghost" id="btn-recenter">Recentrer l'overlay</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROFILS -->
+    <section class="page" id="page-profiles">
+      <header>
+        <h1>Profils</h1>
+        <p>Un profil = tes réglages de sticks, gâchettes et boutons pour un jeu. Donne-lui l'exécutable du jeu et MeikiCtrl l'active tout seul quand le jeu passe au premier plan.</p>
+      </header>
+      <div class="card">
+        <div class="toggle-row big">
+          <div>
+            <div class="t-title">Bascule automatique selon le jeu</div>
+            <div class="t-sub" id="pr-detect">Jeu détecté : —</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="pr-auto" /><span></span></label>
+        </div>
+        <label class="field">Profil hors jeu reconnu
+          <select id="pr-default"></select>
+        </label>
+      </div>
+      <div class="grid side">
+        <div class="card list-card">
+          <h2>Tes profils</h2>
+          <div class="plist" id="pr-list"></div>
+          <div class="actions">
+            <button class="btn" id="pr-new">Nouveau</button>
+            <button class="btn ghost" id="pr-dup">Dupliquer</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Profil sélectionné</h2>
+          <label class="field">Nom
+            <input type="text" id="pr-name" maxlength="40" />
+          </label>
+          <label class="field">Exécutable du jeu
+            <div class="inline">
+              <input type="text" id="pr-exe" placeholder="ex. cod.exe (vide = pas de bascule auto)" />
+              <button class="btn ghost small" id="pr-use-game">Jeu détecté</button>
+            </div>
+          </label>
+          <p class="hint">Astuce : lance ton jeu, reviens ici et clique « Jeu détecté ». Pour COD : <code>cod.exe</code>.</p>
+          <div class="toggle-row big">
+            <div>
+              <div class="t-title">Ce jeu bloque l'émulation</div>
+              <div class="t-sub">Pour les jeux dont l'anti-triche refuse les manettes virtuelles (COD…). Dès que le jeu est lancé, l'émulation se met en pause et ta DualSense redevient visible ; tout reprend quand tu le fermes.</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="pr-block" /><span></span></label>
+          </div>
+          <div class="actions">
+            <button class="btn" data-goto="sticks">Régler sticks &amp; gâchettes</button>
+            <button class="btn ghost" data-goto="remap">Remapper les boutons</button>
+            <button class="btn danger" id="pr-del">Supprimer</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STICKS & GÂCHETTES -->
+    <section class="page" id="page-sticks">
+      <header>
+        <h1>Sticks &amp; gâchettes</h1>
+        <p>Si ton personnage bouge tout seul, c'est de la dérive : lâche le stick et clique « Calibrer ». La courbe change la sensation de visée.</p>
+      </header>
+      <div class="profile-pick">Profil : <select class="profile-select"></select></div>
+      <div class="grid two">
+        <div class="card stick-card">
+          <h2>Stick gauche</h2>
+          <canvas class="stick-view" id="view-l" width="220" height="220"></canvas>
+          <div class="legend"><span class="dot raw"></span>Brut <span class="dot out"></span>Ce que voit le jeu <span class="dot dz"></span>Zone morte</div>
+          <label class="slider">Zone morte <b data-out="leftDeadzone"></b><input type="range" data-key="leftDeadzone" min="0" max="35" /></label>
+          <label class="slider">Anti-zone morte <b data-out="leftAntiDeadzone"></b><input type="range" data-key="leftAntiDeadzone" min="0" max="30" /></label>
+          <label class="slider">Portée max <b data-out="leftOuter"></b><input type="range" data-key="leftOuter" min="80" max="100" /></label>
+          <label class="field">Courbe <select class="curve" data-key="leftCurve"></select></label>
+          <button class="btn" data-calib="left">Calibrer la dérive</button>
+          <div class="note" id="calib-left"></div>
+        </div>
+        <div class="card stick-card">
+          <h2>Stick droit</h2>
+          <canvas class="stick-view" id="view-r" width="220" height="220"></canvas>
+          <div class="legend"><span class="dot raw"></span>Brut <span class="dot out"></span>Ce que voit le jeu <span class="dot dz"></span>Zone morte</div>
+          <label class="slider">Zone morte <b data-out="rightDeadzone"></b><input type="range" data-key="rightDeadzone" min="0" max="35" /></label>
+          <label class="slider">Anti-zone morte <b data-out="rightAntiDeadzone"></b><input type="range" data-key="rightAntiDeadzone" min="0" max="30" /></label>
+          <label class="slider">Portée max <b data-out="rightOuter"></b><input type="range" data-key="rightOuter" min="80" max="100" /></label>
+          <label class="field">Courbe <select class="curve" data-key="rightCurve"></select></label>
+          <button class="btn" data-calib="right">Calibrer la dérive</button>
+          <div class="note" id="calib-right"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Gâchettes L2 / R2</h2>
+        <div class="grid two flat">
+          <div>
+            <label class="slider">Zone morte <b data-out="triggerDeadzone"></b><input type="range" data-key="triggerDeadzone" min="0" max="40" /></label>
+            <label class="field">Courbe <select class="curve" data-key="triggerCurve"></select></label>
+          </div>
+          <div>
+            <div class="toggle-row big">
+              <div>
+                <div class="t-title">Gâchette rapide</div>
+                <div class="t-sub">Le moindre appui compte comme un appui complet : tu tires plus tôt.</div>
+              </div>
+              <label class="switch"><input type="checkbox" id="hair" /><span></span></label>
+            </div>
+          </div>
+        </div>
+        <p class="hint">Anti-zone morte : compense la zone morte propre au jeu (COD en a une). Monte-la doucement jusqu'à ce que le moindre mouvement du stick fasse bouger la visée.</p>
+      </div>
+    </section>
+
+    <!-- REMAPPAGE -->
+    <section class="page" id="page-remap">
+      <header>
+        <h1>Remappage</h1>
+        <p>Choisis quel bouton Xbox envoie chaque bouton de ta DualSense, pour ce profil.</p>
+      </header>
+      <div class="profile-pick">Profil : <select class="profile-select"></select></div>
+      <div class="card">
+        <div class="remap" id="remap"></div>
+        <div class="actions">
+          <button class="btn ghost" id="remap-reset">Remettre par défaut</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ÉMULATION -->
+    <section class="page" id="page-emulation">
+      <header>
+        <h1>Émulation Xbox</h1>
+        <p>Ta DualSense devient une manette Xbox 360 pour tous les jeux PC, avec tes réglages de profil appliqués.</p>
+      </header>
+      <div class="card">
+        <div class="toggle-row big">
+          <div>
+            <div class="t-title">Manette Xbox 360 virtuelle</div>
+            <div class="t-sub">Via le pilote ViGEmBus</div>
+          </div>
+          <label class="switch"><input type="checkbox" class="t-emu" /><span></span></label>
+        </div>
+        <div class="state" id="e-state"></div>
+      </div>
+      <div class="card">
+        <div class="toggle-row big">
+          <div>
+            <div class="t-title">Masquer la DualSense aux jeux</div>
+            <div class="t-sub">Pendant l'émulation, les jeux ne voient plus que la manette Xbox : fini les doubles entrées.</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="hide" /><span></span></label>
+        </div>
+        <div class="state" id="h-state"></div>
+        <p class="hint">Utilise HidHide (Nefarius). Windows te demandera une autorisation administrateur à chaque masquage ou démasquage. En quittant MeikiCtrl, la DualSense redevient visible.</p>
+      </div>
+      <div class="card">
+        <h2>À savoir</h2>
+        <p class="hint">Steam : si Steam Input est activé pour ta DualSense, désactive-le pour ce jeu, sinon il y aura un doublon.</p>
+        <p class="hint warn">MeikiCtrl n'a ni macros ni turbo. Sur COD, Ricochet peut sanctionner ce genre d'outils en partie classée.</p>
+      </div>
+    </section>
+
+    <!-- OVERLAY -->
+    <section class="page" id="page-overlay">
+      <header>
+        <h1>Overlay manette</h1>
+        <p>Une manette 3D animée par-dessus ton jeu : elle s'allume quand tu appuies, et ne consomme presque rien.</p>
+      </header>
+      <div class="card">
+        <div class="toggle-row big">
+          <div>
+            <div class="t-title">Afficher l'overlay</div>
+            <div class="t-sub">Fenêtre transparente, au premier plan, que les clics traversent · <kbd>F8</kbd></div>
+          </div>
+          <label class="switch"><input type="checkbox" class="t-overlay" /><span></span></label>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <h2>Modèle de manette</h2>
+          <div class="corners models" id="models">
+            <button data-model="0">Automatique</button>
+            <button data-model="1">DualSense</button>
+            <button data-model="2">Xbox</button>
+          </div>
+          <p class="hint" id="model-hint">Automatique : l'overlay affiche la manette que tu as branchée.</p>
+          <h2 class="mt">Position</h2>
+          <div class="corners" id="corners">
+            <button data-corner="3">Haut gauche</button>
+            <button data-corner="2">Haut droite</button>
+            <button data-corner="1">Bas gauche</button>
+            <button data-corner="0">Bas droite</button>
+          </div>
+          <label class="slider">Taille <b data-out-ov="scale"></b><input type="range" data-ov="scale" min="60" max="160" /></label>
+          <label class="slider">Opacité <b data-out-ov="opacity"></b><input type="range" data-ov="opacity" min="30" max="100" /></label>
+        </div>
+        <div class="card">
+          <h2>Couleur des éclairs</h2>
+          <div class="swatches" id="swatches"></div>
+          <p class="hint">Les boutons s'allument de la même couleur. Le bouton PS et le micro restent rouges.</p>
+          <h2 class="mt">Raccourcis</h2>
+          <table class="map">
+            <tr><td><kbd>F8</kbd></td><td>Afficher / cacher l'overlay</td></tr>
+            <tr><td><kbd>F9</kbd></td><td>Recentrer</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SYSTÈME -->
+    <section class="page" id="page-system">
+      <header>
+        <h1>Système</h1>
+        <p>Performances, droits et démarrage.</p>
+      </header>
+      <div class="card">
+        <h2>Mode performance <span class="tag">comme OBS</span></h2>
+        <div class="perf-grid">
+          <div class="perf-item">
+            <div class="k">Priorité GPU de l'overlay</div>
+            <div class="perf-v" id="gpu-prio">—</div>
+          </div>
+          <div class="perf-item">
+            <div class="k">Droits administrateur</div>
+            <div class="perf-v" id="elevated">—</div>
+          </div>
+        </div>
+        <label class="field">Priorité du processus
+          <select id="proc-prio">
+            <option value="0">Normale</option>
+            <option value="1">Au-dessus de la normale (recommandé)</option>
+            <option value="2">Haute</option>
+          </select>
+        </label>
+        <p class="hint">Même réglage que « Priorité du processus » dans OBS : la lecture de ta manette et l'overlay passent avant les autres programmes quand le PC est chargé.</p>
+        <div class="toggle-row big">
+          <div>
+            <div class="t-title">Mode administrateur</div>
+            <div class="t-sub">Garantit la priorité GPU « temps réel » (overlay fluide même à 500+ FPS) et supprime les demandes d'autorisation de HidHide.</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="admin-mode" /><span></span></label>
+        </div>
+        <div class="note" id="admin-note"></div>
+      </div>
+      <div class="card">
+        <div class="toggle-row big">
+          <div>
+            <div class="t-title">Lancer MeikiCtrl avec Windows</div>
+            <div class="t-sub">Démarre discrètement dans la zone de notification. En mode administrateur, sans demande d'autorisation.</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="autostart" /><span></span></label>
+        </div>
+        <div class="note" id="autostart-note"></div>
+      </div>
+      <div class="card">
+        <h2>Infos</h2>
+        <p class="hint">Fermer cette fenêtre la détruit : il ne reste que l'icône près de l'horloge, et l'interface ne consomme plus rien.</p>
+        <p class="hint">Réglages enregistrés dans <code>%APPDATA%\MeikiCtrl\settings.json</code>.</p>
+        <p class="hint">MeikiCtrl v0.4 · Modèles 3D : « PS5 Controller » de Taohid Animation et « Xbox Controller-Black » d'ArtStudio640 (CC-BY 4.0).</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
