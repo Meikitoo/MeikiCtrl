@@ -8,12 +8,15 @@
 mod engine;
 mod hidhide;
 mod model;
+mod output;
 mod overlay;
 mod pad;
 mod profiles;
 mod render;
 mod state;
+mod stats;
 mod system;
+mod toast;
 mod ui;
 
 use std::sync::atomic::Ordering;
@@ -82,6 +85,9 @@ fn main() {
         s.autostart = system::autostart_enabled();
         s.elevated = elevated;
     }
+    stats::now(); // démarre l'horloge
+    toast::spawn();
+    stats::spawn(shared.clone());
     pad::spawn(shared.clone());
     profiles::spawn(shared.clone());
     hidhide::spawn(shared.clone());
@@ -184,7 +190,7 @@ fn overlay_loop(shared: Arc<Shared>) -> windows::core::Result<()> {
                 renderer = Some(render::Renderer::new(ov.hwnd, ov.width, ov.height, &extra)?);
             }
         }
-        let look = model::Look { accent: glam::Vec3::from(cfg.accent), opacity: cfg.opacity };
+        let look = model::Look { accent: glam::Vec3::from(cfg.accent), opacity: cfg.opacity, skin: cfg.skin };
 
         // 3. Animation + rendu
         let dt = (frame_start - last).as_secs_f32().min(0.1);

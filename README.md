@@ -30,6 +30,22 @@ Pas besoin de Node ni de npm : l'interface (dossier `ui/`) est en HTML/CSS/JS si
 
 ## Ce que fait l'appli
 
+### Nouveau en 1.0
+
+- **Nouveau look noir et blanc**, accueil « Prêt à jouer ? » avec la manette en direct, réglages pointus rangés dans « Avancé ».
+- **Barre lumineuse vivante** : batterie (vert → rouge, pulse en charge), couleur fixe, respiration, une couleur par profil (par jeu), couleur du joueur, flash blanc au tir. **LED joueur** 1 à 4.
+- **Gâchettes adaptatives** par profil (résistance ou clic d'arme, force réglable), avec un interrupteur général pour tout couper.
+- **Santé de la manette** : fréquence (Hz) et régularité, dérive au repos jour après jour, test de circularité des sticks, détection des boutons qui rebondissent, compteur d'appuis.
+- **Sessions** : durée, jeu et appuis de chaque session, bilan à la fin, **rappel de pause** (notification noir et blanc par-dessus le jeu), alerte batterie faible.
+- **Skins de l'overlay** : éclairs, noir mat, blanc, couleur.
+- **Assistant de premier lancement** (manette, pilotes ViGEmBus et HidHide, préférences).
+- **Français / anglais**.
+- **Bouton Ko-fi** pour soutenir le projet : https://ko-fi.com/meikitoow17
+
+Pendant un jeu marqué « bloque l'émulation » (COD), MeikiCtrl ne touche ni à la lumière ni aux gâchettes : le jeu garde la main. En quittant, les gâchettes sont libérées et la lumière rendue à la manette.
+
+### Tout le reste
+
 - **Profils par jeu** : réglages sticks, gâchettes et boutons par jeu. MeikiCtrl active tout seul le bon profil quand le jeu passe au premier plan.
 - **Remappage** : chaque bouton DualSense peut envoyer n'importe quel bouton Xbox (ou rien).
 - **Courbes et anti-zone morte** : préréglages « Visée FPS », « Précision max », « Réactif », anti-zone morte pour compenser celle du jeu, gâchette rapide.
@@ -44,7 +60,7 @@ Pas besoin de Node ni de npm : l'interface (dossier `ui/`) est en HTML/CSS/JS si
 - **Overlay** : la manette 3D animée par-dessus le jeu.
 - **Zone de notification** : fermer la fenêtre ne coupe pas l'appli. Clic gauche sur l'icône pour rouvrir, clic droit pour le menu (overlay, émulation, quitter).
 
-Les réglages sont sauvegardés dans `%APPDATA%\MeikiCtrl\settings.json`.
+Les réglages sont sauvegardés dans `%APPDATA%\MeikiCtrl\settings.json`, les stats (santé, sessions) dans `stats.json` au même endroit.
 
 ## Raccourcis
 

@@ -8,6 +8,8 @@ use std::time::Duration;
 use hidapi::HidApi;
 
 use crate::engine::{self, Emulator};
+use crate::output::{self, OutputCtl};
+use crate::stats;
 use crate::state::Shared;
 
 const VID_SONY: u16 = 0x054C;
@@ -134,7 +136,17 @@ fn run(shared: Arc<Shared>) {
 
         let mut raw = PadState { connected: true, edge, ..Default::default() };
         let mut buf = [0u8; 128];
+        let mut outctl = OutputCtl::new();
+        let mut last_out = 0.0f64;
+        let mut got_report = false;
         loop {
+            // Lumière et gâchettes adaptatives (au plus ~60 fois par seconde),
+            // après le premier rapport (pour savoir si c'est de l'USB ou du Bluetooth).
+            let t = stats::now();
+            if got_report && t - last_out >= 0.016 {
+                last_out = t;
+                drive_outputs(&shared, &dev, &mut outctl, &raw, t);
+            }
             match dev.read_timeout(&mut buf, 250) {
                 Ok(0) => {
                     // Pas de nouveau rapport : on garde l'émulation à jour (activation/désactivation).
@@ -149,6 +161,14 @@ fn run(shared: Arc<Shared>) {
                 }
                 Ok(n) => {
                     if parse(&buf[..n], &mut raw) {
+                        got_report = true;
+                        let (hz, avg_ms, worst_ms) = match shared.stats.lock() {
+                            Ok(mut tr) => {
+                                tr.on_report(&raw, stats::now(), true);
+                                (tr.hz, tr.avg_ms, tr.worst_ms)
+                            }
+                            Err(_) => (0.0, 0.0, 0.0),
+                        };
                         let profile = shared.profile();
                         let out = engine::process(&raw, &profile);
                         let want = shared.emulation_wanted();
@@ -168,6 +188,9 @@ fn run(shared: Arc<Shared>) {
                             l.buttons = out.buttons;
                             l.emulation_active = active;
                             l.emulation_error = err;
+                            l.hz = hz;
+                            l.avg_ms = avg_ms;
+                            l.worst_ms = worst_ms;
                         }
                         let sig = input_signature(&out);
                         if sig != last_sig {
@@ -184,6 +207,9 @@ fn run(shared: Arc<Shared>) {
                     break;
                 }
             }
+        }
+        if let Ok(mut tr) = shared.stats.lock() {
+            tr.disconnected();
         }
         set_disconnected(&shared, &mut emu);
         std::thread::sleep(Duration::from_millis(500));
@@ -264,6 +290,9 @@ fn xbox_poll(shared: &Arc<Shared>, duration: Duration) {
             buttons,
             ..Default::default()
         };
+        if let Ok(mut tr) = shared.stats.lock() {
+            tr.on_report(&raw, stats::now(), false);
+        }
         let profile = shared.profile();
         let out = engine::process(&raw, &profile);
         let sig = input_signature(&out);
@@ -295,6 +324,35 @@ fn xbox_poll(shared: &Arc<Shared>, duration: Duration) {
             return;
         }
     }
+}
+
+/// Barre lumineuse, LED joueur et gâchettes adaptatives selon les réglages.
+/// Rien n'est envoyé pendant un jeu qui pilote la manette lui-même (ex. COD) ni en quittant.
+fn drive_outputs(shared: &Arc<Shared>, dev: &hidapi::HidDevice, ctl: &mut OutputCtl, raw: &PadState, t: f64) {
+    if shared.quitting.load(Ordering::Relaxed) {
+        ctl.release(dev, raw.bluetooth);
+        shared.released.store(true, Ordering::Relaxed);
+        return;
+    }
+    let allowed = !shared.emulation_blocked.load(Ordering::Relaxed);
+    // Bouton qui déclenche le flash : L2/R2 au-delà de 60 %, sinon le bouton lui-même.
+    let flash_button = shared.settings.lock().map(|s| s.lightbar.flash_button).unwrap_or(7);
+    let fire = match flash_button {
+        6 => raw.l2 > 0.6,
+        7 => raw.r2 > 0.6,
+        b => raw.buttons & (1u32 << b) != 0,
+    };
+    let wanted = if allowed {
+        let profile = shared.profile();
+        shared
+            .settings
+            .lock()
+            .ok()
+            .map(|s| output::wanted(&s.lightbar, &profile, s.adaptive_triggers, raw, t, ctl.flash))
+    } else {
+        None
+    };
+    ctl.update(dev, raw.bluetooth, allowed, wanted.as_ref(), fire, t);
 }
 
 fn set_disconnected(shared: &Arc<Shared>, emu: &mut Emulator) {

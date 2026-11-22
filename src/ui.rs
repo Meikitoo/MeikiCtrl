@@ -12,7 +12,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::state::{Live, Settings, Shared, Sys};
-use crate::{hidhide, system};
+use crate::stats::{DriftDay, LiveSession, SessionRec};
+use crate::{hidhide, stats, system, toast};
 
 type Sh<'a> = State<'a, Arc<Shared>>;
 
@@ -165,6 +166,87 @@ async fn calibrate(state: Sh<'_>, stick: String, profile: usize) -> Result<f32, 
     Ok(dz)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HealthOut {
+    hz: f32,
+    avg_ms: f32,
+    worst_ms: f32,
+    presses: Vec<u64>,
+    bounces: Vec<u32>,
+    drift: Vec<DriftDay>,
+    /// Les plus récentes d'abord.
+    sessions: Vec<SessionRec>,
+    play_minutes: f64,
+    current: Option<LiveSession>,
+}
+
+/// Santé de la manette + sessions (interrogé une fois par seconde par l'interface).
+#[tauri::command]
+fn get_health(state: Sh<'_>) -> HealthOut {
+    let tr = match state.stats.lock() {
+        Ok(t) => t,
+        Err(_) => {
+            return HealthOut {
+                hz: 0.0,
+                avg_ms: 0.0,
+                worst_ms: 0.0,
+                presses: vec![],
+                bounces: vec![],
+                drift: vec![],
+                sessions: vec![],
+                play_minutes: 0.0,
+                current: None,
+            }
+        }
+    };
+    HealthOut {
+        hz: tr.hz,
+        avg_ms: tr.avg_ms,
+        worst_ms: tr.worst_ms,
+        presses: tr.store.presses.clone(),
+        bounces: tr.store.bounces.clone(),
+        drift: tr.store.drift.iter().rev().take(30).rev().cloned().collect(),
+        sessions: tr.store.sessions.iter().rev().take(20).cloned().collect(),
+        play_minutes: tr.store.play_minutes,
+        current: tr.live_session(),
+    }
+}
+
+#[tauri::command]
+fn reset_health(state: Sh<'_>) {
+    if let Ok(mut tr) = state.stats.lock() {
+        tr.reset();
+    }
+}
+
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    system::open_url(&url)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SetupStatus {
+    vigem: bool,
+    hidhide: bool,
+}
+
+/// Pour l'assistant de premier lancement : pilotes installés ?
+#[tauri::command]
+async fn setup_status() -> SetupStatus {
+    SetupStatus { vigem: system::vigem_installed(), hidhide: hidhide::installed() }
+}
+
+#[tauri::command]
+fn test_toast(state: Sh<'_>) {
+    if state.en() {
+        toast::show("MeikiCtrl is ready", "Notifications show up here, on top of your game.");
+    } else {
+        toast::show("MeikiCtrl est prêt", "Les notifications s'afficheront ici, par-dessus ton jeu.");
+    }
+}
+
 fn open_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -182,11 +264,20 @@ fn open_main(app: &AppHandle) {
     }
 }
 
-/// Quitter proprement : rendre la DualSense visible si elle était masquée, puis fermer.
+/// Quitter proprement : gâchettes libres et LED d'origine, stats enregistrées,
+/// DualSense de nouveau visible si elle était masquée, puis fermer.
 fn quit(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
         let st = app.state::<Arc<Shared>>();
+        st.quitting.store(true, Ordering::Relaxed);
+        for _ in 0..30 {
+            if st.released.load(Ordering::Relaxed) || !st.live.lock().map(|l| l.connected && !l.xbox).unwrap_or(false) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        stats::save_now(&st);
         hidhide::restore(&st);
         app.exit(0);
     });
@@ -217,13 +308,20 @@ pub fn run(shared: Arc<Shared>) {
             set_autostart,
             set_process_priority,
             set_admin_mode,
-            calibrate
+            calibrate,
+            get_health,
+            reset_health,
+            open_url,
+            setup_status,
+            test_toast
         ])
         .setup(|app| {
-            let open = MenuItem::with_id(app, "open", "Ouvrir MeikiCtrl", true, None::<&str>)?;
-            let overlay = MenuItem::with_id(app, "overlay", "Overlay : afficher / cacher (F8)", true, None::<&str>)?;
-            let emu = MenuItem::with_id(app, "emu", "Émulation Xbox : activer / couper", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quitter MeikiCtrl", true, None::<&str>)?;
+            let en = app.state::<Arc<Shared>>().en();
+            let tr = |fr: &'static str, eng: &'static str| if en { eng } else { fr };
+            let open = MenuItem::with_id(app, "open", tr("Ouvrir MeikiCtrl", "Open MeikiCtrl"), true, None::<&str>)?;
+            let overlay = MenuItem::with_id(app, "overlay", tr("Overlay : afficher / cacher (F8)", "Overlay: show / hide (F8)"), true, None::<&str>)?;
+            let emu = MenuItem::with_id(app, "emu", tr("Émulation Xbox : activer / couper", "Xbox emulation: on / off"), true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", tr("Quitter MeikiCtrl", "Quit MeikiCtrl"), true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &overlay, &emu, &quit_item])?;
 
             let mut tray = TrayIconBuilder::with_id("meikictrl")

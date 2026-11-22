@@ -402,6 +402,8 @@ fn about(pivot: Vec3, rot: Quat) -> Mat4 {
 pub struct Look {
     pub accent: Vec3,
     pub opacity: f32,
+    /// Habillage de la coque : 0 = éclairs, 1 = noir mat, 2 = blanc, 3 = couleur.
+    pub skin: u8,
 }
 
 pub fn build(a: &Animator, p: &PadState, asset: Option<(&Asset, usize)>, look: &Look) -> Scene {
@@ -421,9 +423,20 @@ fn build_asset(a: &Animator, p: &PadState, asset: &Asset, base: usize, look: &Lo
     for (i, part) in asset.parts.iter().enumerate() {
         let mesh = base + i;
         match part.role {
-            ROLE_SHELL => {
-                b.add_mesh(mesh, Mat4::IDENTITY, part.color).lightning();
-            }
+            ROLE_SHELL => match look.skin {
+                1 => {
+                    b.add_mesh(mesh, Mat4::IDENTITY, Vec3::splat(0.035));
+                }
+                2 => {
+                    b.add_mesh(mesh, Mat4::IDENTITY, Vec3::splat(0.82));
+                }
+                3 => {
+                    b.add_mesh(mesh, Mat4::IDENTITY, accent * 0.5);
+                }
+                _ => {
+                    b.add_mesh(mesh, Mat4::IDENTITY, part.color).lightning();
+                }
+            },
             ROLE_STICK_L | ROLE_STICK_R => {
                 let (sx, sy, bit) = if part.role == ROLE_STICK_L {
                     (p.lx, p.ly, btn::L3)

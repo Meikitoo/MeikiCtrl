@@ -37,6 +37,13 @@ pub struct Profile {
     pub block_emulation: bool,
     /// Pour chaque bouton DualSense (ordre `engine::SOURCES`) : bouton Xbox envoyé (0 = aucun).
     pub remap: Vec<u16>,
+    /// Couleur de la barre lumineuse pour ce jeu (mode « couleur du profil »).
+    pub light_color: [f32; 3],
+    /// Gâchettes adaptatives : 0 = aucun effet, 1 = résistance, 2 = clic d'arme.
+    pub trigger_l: u8,
+    pub trigger_r: u8,
+    /// Force des gâchettes adaptatives (0,05 à 1).
+    pub trigger_strength: f32,
 }
 
 impl Default for Profile {
@@ -57,6 +64,10 @@ impl Default for Profile {
             hair_trigger: false,
             block_emulation: false,
             remap: default_remap(),
+            light_color: [1.0, 1.0, 1.0],
+            trigger_l: 0,
+            trigger_r: 0,
+            trigger_strength: 0.6,
         }
     }
 }
@@ -74,11 +85,39 @@ pub struct OverlayCfg {
     pub accent: [f32; 3],
     /// Modèle affiché : 0 = automatique (selon la manette branchée), 1 = DualSense, 2 = Xbox
     pub model: u8,
+    /// Habillage de la coque : 0 = éclairs, 1 = noir mat, 2 = blanc, 3 = couleur.
+    pub skin: u8,
 }
 
 impl Default for OverlayCfg {
     fn default() -> Self {
-        Self { corner: 0, scale: 1.0, opacity: 1.0, accent: [0.0, 0.85, 1.0], model: 0 }
+        Self { corner: 0, scale: 1.0, opacity: 1.0, accent: [0.0, 0.85, 1.0], model: 0, skin: 0 }
+    }
+}
+
+/// Barre lumineuse et LED joueur de la DualSense.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LightCfg {
+    /// 0 = ne pas toucher, 1 = couleur fixe, 2 = batterie, 3 = couleur du profil,
+    /// 4 = couleur du joueur, 5 = respiration, 6 = RGB (toutes les couleurs qui défilent).
+    pub mode: u8,
+    pub color: [f32; 3],
+    /// Luminosité (0,05 à 1).
+    pub brightness: f32,
+    /// Éclair blanc quand tu appuies sur le bouton de tir choisi.
+    pub flash_on_fire: bool,
+    /// Bouton qui déclenche le flash (numéro de bit, voir `pad::btn`) : 7 = R2 par défaut.
+    pub flash_button: u8,
+    /// Numéro de joueur (LED sous le pavé) : 0 = éteintes, 1 à 4.
+    pub player: u8,
+    /// Vitesse des effets RGB et respiration (0,05 à 1).
+    pub speed: f32,
+}
+
+impl Default for LightCfg {
+    fn default() -> Self {
+        Self { mode: 2, color: [1.0, 1.0, 1.0], brightness: 0.8, flash_on_fire: false, flash_button: 7, player: 1, speed: 0.5 }
     }
 }
 
@@ -102,6 +141,17 @@ pub struct Settings {
     pub admin_mode: bool,
     /// Priorité du processus, comme OBS : 0 = normale, 1 = au-dessus de la normale, 2 = haute.
     pub process_priority: u8,
+    pub lightbar: LightCfg,
+    /// Interrupteur général des gâchettes adaptatives.
+    pub adaptive_triggers: bool,
+    /// Langue : « fr », « en » (vide = celle de Windows).
+    pub lang: String,
+    /// Assistant de premier lancement terminé.
+    pub first_run_done: bool,
+    /// Notifications à l'écran (pause, bilan, batterie).
+    pub toasts: bool,
+    pub break_reminder: bool,
+    pub break_minutes: u32,
 }
 
 impl Default for Settings {
@@ -116,6 +166,13 @@ impl Default for Settings {
             overlay: OverlayCfg::default(),
             admin_mode: false,
             process_priority: 1,
+            lightbar: LightCfg::default(),
+            adaptive_triggers: true,
+            lang: String::new(),
+            first_run_done: false,
+            toasts: true,
+            break_reminder: true,
+            break_minutes: 120,
         }
     }
 }
@@ -158,11 +215,29 @@ impl Settings {
             p.trigger_deadzone = p.trigger_deadzone.clamp(0.0, 0.5);
             p.trigger_curve = p.trigger_curve.clamp(0.3, 3.0);
             p.exe = p.exe.trim().to_lowercase();
+            p.trigger_l = p.trigger_l.min(2);
+            p.trigger_r = p.trigger_r.min(2);
+            p.trigger_strength = p.trigger_strength.clamp(0.05, 1.0);
+            p.light_color = p.light_color.map(|x| x.clamp(0.0, 1.0));
+        }
+        let l = &mut self.lightbar;
+        l.mode = l.mode.min(6);
+        l.speed = l.speed.clamp(0.05, 1.0);
+        if l.flash_button > 18 {
+            l.flash_button = 7;
+        }
+        l.player = l.player.min(4);
+        l.brightness = l.brightness.clamp(0.05, 1.0);
+        l.color = l.color.map(|x| x.clamp(0.0, 1.0));
+        self.break_minutes = self.break_minutes.clamp(15, 600);
+        if self.lang != "fr" && self.lang != "en" {
+            self.lang.clear();
         }
         self.process_priority = self.process_priority.min(2);
         let o = &mut self.overlay;
         o.corner = o.corner.min(3);
         o.model = o.model.min(2);
+        o.skin = o.skin.min(3);
         o.scale = o.scale.clamp(0.5, 2.0);
         o.opacity = o.opacity.clamp(0.2, 1.0);
     }
@@ -202,6 +277,10 @@ pub struct Live {
     pub buttons: u32,
     pub emulation_active: bool,
     pub emulation_error: Option<String>,
+    /// Fréquence de la manette (rapports par seconde) et intervalle moyen / pire (ms).
+    pub hz: f32,
+    pub avg_ms: f32,
+    pub worst_ms: f32,
 }
 
 /// État des services (profils, HidHide, démarrage auto).
@@ -246,6 +325,12 @@ pub struct Shared {
     pub overlay_rev: AtomicU32,
     /// Incrémenté à chaque changement d'entrée (bouton, stick, gâchette) : réveille l'overlay.
     pub input_seq: AtomicU64,
+    /// Santé de la manette et sessions.
+    pub stats: Mutex<crate::stats::Tracker>,
+    /// MeikiCtrl se ferme : la manette rend la main (gâchettes libres, LED d'origine).
+    pub quitting: AtomicBool,
+    /// La manette a bien rendu la main (lumière / gâchettes).
+    pub released: AtomicBool,
 }
 
 impl Shared {
@@ -263,6 +348,9 @@ impl Shared {
             recenter: AtomicBool::new(false),
             overlay_rev: AtomicU32::new(0),
             input_seq: AtomicU64::new(0),
+            stats: Mutex::new(crate::stats::Tracker::new()),
+            quitting: AtomicBool::new(false),
+            released: AtomicBool::new(false),
             settings: Mutex::new(settings),
         }
     }
@@ -295,6 +383,11 @@ impl Shared {
 }
 
 impl Shared {
+    /// Interface en anglais ?
+    pub fn en(&self) -> bool {
+        self.settings.lock().map(|s| s.lang == "en").unwrap_or(false)
+    }
+
     /// Émulation réellement voulue : demandée ET pas en pause à cause d'un jeu.
     pub fn emulation_wanted(&self) -> bool {
         self.emulation_on.load(Ordering::Relaxed) && !self.emulation_blocked.load(Ordering::Relaxed)

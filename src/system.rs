@@ -92,6 +92,29 @@ pub fn relaunch_elevated() -> Result<(), String> {
     run_as_admin(&exe.to_string_lossy(), &args.join(" "), false, true)
 }
 
+/// Ouvre un lien dans le navigateur par défaut (seulement des liens https).
+pub fn open_url(url: &str) -> Result<(), String> {
+    if !url.starts_with("https://") {
+        return Err("Lien refusé.".into());
+    }
+    unsafe {
+        let file = HSTRING::from(url);
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            lpVerb: w!("open"),
+            lpFile: PCWSTR(file.as_ptr()),
+            nShow: SW_SHOWNORMAL.0,
+            ..Default::default()
+        };
+        ShellExecuteExW(&mut info).map_err(|e| e.to_string())
+    }
+}
+
+/// Le pilote ViGEmBus (manette Xbox virtuelle) est-il installé ?
+pub fn vigem_installed() -> bool {
+    quiet("reg", &["query", r"HKLM\SYSTEM\CurrentControlSet\Services\ViGEmBus"])
+}
+
 // ---------- Priorité du processus (comme OBS) ----------
 
 /// 0 = normale, 1 = au-dessus de la normale, 2 = haute
